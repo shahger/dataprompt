@@ -129,3 +129,65 @@ def test_contract_snapshot(service):
                 "schemas": schema["components"]["schemas"]}
     expected = json.loads((Path(__file__).parent / "api_contract.json").read_text())
     assert contract == expected
+
+@pytest.mark.parametrize("timecode", [999.0, 1.0])
+def test_evidence_fallback(service, video, monkeypatch, timecode):
+    module, client, _ = service
+    monkeypatch.setattr(module, "analyze_video", lambda path: [{
+        "type": "test", "timecode_sec": timecode, "description": "test"}])
+    job = wait_job(client, upload(client, video).json()["job_id"])
+    assert job["status"] == "done"
+    evidence = job["violations"][0]["evidence_frames"]
+    assert len(evidence) == 1
+    assert evidence[0]["timestamp_sec"] == pytest.approx(0.9)
+    assert cv2.imdecode(np.frombuffer(base64.b64decode(evidence[0]["image_base64"]), np.uint8), 1) is not None
+
+
+def test_rule_flag_keeps_ui_rule(service, video, monkeypatch):
+    module, client, _ = service
+    monkeypatch.setattr(module, "INCLUDE_RULE", False)
+    monkeypatch.setattr(module, "analyze_video", lambda path: [{
+        "type": "test", "timecode_sec": 0, "description": "test", "rule": "test rule"}])
+    job = wait_job(client, upload(client, video).json()["job_id"])
+    assert "rule" not in job["violations"][0]
+    assert client.get("/ui/api/jobs/" + job["job_id"]).json()["violations"][0]["rule"] == "test rule"
+
+
+def test_timeout_includes_queue_and_cannot_be_overwritten(service, video, monkeypatch):
+    module, client, _ = service
+    monkeypatch.setattr(module, "JOB_TIMEOUT_SEC", 0.15)
+    entered, release = threading.Event(), threading.Event()
+
+    def stub(path):
+        entered.set()
+        assert release.wait(3)
+        return []
+
+    monkeypatch.setattr(module, "analyze_video", stub)
+    try:
+        first = upload(client, video).json()["job_id"]
+        assert entered.wait(1)
+        second = upload(client, video).json()["job_id"]
+        for job_id in (first, second):
+            job = wait_job(client, job_id)
+            assert job["status"] == "failed" and "timeout" in job["error"]
+    finally:
+        release.set()
+    deadline = time.monotonic() + 2
+    while list(module.UPLOAD_DIR.iterdir()) and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert not list(module.UPLOAD_DIR.iterdir())
+    for job_id in (first, second):
+        assert client.get("/api/v1/jobs/" + job_id, headers=HEADERS).json()["status"] == "failed"
+
+
+def test_structured_log_has_no_payload(service, video, monkeypatch, caplog):
+    module, client, _ = service
+    monkeypatch.setattr(module, "analyze_video", lambda path: [])
+    with caplog.at_level("INFO", logger=module.log.name):
+        job = wait_job(client, upload(client, video).json()["job_id"])
+    records = [json.loads(r.message) for r in caplog.records if r.message.startswith('{')]
+    assert records
+    assert set(records[-1]) == {"job_id", "duration_sec", "verdict"}
+    assert records[-1]["job_id"] == job["job_id"]
+    assert "unit-test-key" not in caplog.text

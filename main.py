@@ -2,12 +2,16 @@
 import base64
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 import hmac
 import importlib.util
 import logging
 import math
 import os
+import json
 from pathlib import Path
+import threading
+import time
 import uuid
 from typing import Annotated, Literal
 
@@ -19,12 +23,14 @@ from starlette.concurrency import run_in_threadpool
 
 import db
 
-log = logging.getLogger("cashier")
+log = logging.getLogger("uvicorn.error")
 ROOT = Path(__file__).resolve().parent
 API_KEY = os.environ.get("API_KEY", "change-me")
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", str(ROOT / "uploads")))
 WORKERS = int(os.environ.get("WORKERS", "1"))
 MAX_BYTES = 200 * 1024 * 1024
+INCLUDE_RULE = os.environ.get("INCLUDE_RULE", "true").lower() == "true"
+JOB_TIMEOUT_SEC = float(os.environ.get("JOB_TIMEOUT_SEC", "270"))
 
 if importlib.util.find_spec("model_service") is not None:
     from model_service import analyze_video
@@ -80,8 +86,8 @@ JobResponse = Annotated[Processing | Done | Failed, Field(discriminator="status"
 
 @asynccontextmanager
 async def lifespan(app):
-    if not API_KEY or WORKERS < 1:
-        raise RuntimeError("API_KEY must be nonempty and WORKERS must be positive")
+    if not API_KEY or WORKERS < 1 or not math.isfinite(JOB_TIMEOUT_SEC) or JOB_TIMEOUT_SEC <= 0:
+        raise RuntimeError("API_KEY must be nonempty; WORKERS and JOB_TIMEOUT_SEC must be positive")
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     await run_in_threadpool(db.init_db)
     # This directory belongs exclusively to this service; discard interrupted uploads.
@@ -104,15 +110,71 @@ def check_key(x_api_key: str | None = Header(None)):
         raise HTTPException(status_code=401, detail="invalid api key")
 
 
+@dataclass
+class JobControl:
+    job_id: str
+    path: Path
+    submitted: float = field(default_factory=time.monotonic)
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    finished: bool = False
+    timer: threading.Timer | None = None
+    future: object = None
+
+    def finish(self, status, result):
+        with self.lock:
+            if self.finished:
+                return False
+            duration = time.monotonic() - self.submitted
+            if duration >= JOB_TIMEOUT_SEC:
+                status, result = "failed", {"error": "job timeout exceeded"}
+            db.finish_job(self.job_id, status, result)
+            self.finished = True
+            if self.timer:
+                self.timer.cancel()
+            # Log only these fields, never model exceptions, files, keys or frames.
+            log.info(json.dumps({"job_id": self.job_id, "duration_sec": round(duration, 3),
+                                 "verdict": result.get("verdict", "failed")}))
+            return True
+
+    def expire(self):
+        try:
+            self.finish("failed", {"error": "job timeout exceeded"})
+        except Exception:
+            # Retry if the database was temporarily unavailable at the deadline.
+            self.timer = threading.Timer(1, self.expire)
+            self.timer.daemon = True
+            self.timer.start()
+            return
+        if self.future and self.future.cancel():
+            self.path.unlink(missing_ok=True)
+
+
 def frame_b64(video_path, t_sec):
     cap = cv2.VideoCapture(str(video_path))
     try:
         cap.set(cv2.CAP_PROP_POS_MSEC, t_sec * 1000)
         ok, frame = cap.read()
-        if not ok:
-            return None
         fps = cap.get(cv2.CAP_PROP_FPS)
-        timestamp = max(0.0, (cap.get(cv2.CAP_PROP_POS_FRAMES) - 1) / fps) if fps > 0 else t_sec
+        fps = fps if math.isfinite(fps) and fps > 0 else 30.0
+        timestamp = max(0.0, (cap.get(cv2.CAP_PROP_POS_FRAMES) - 1) / fps)
+        if not ok:
+            # Broken indexes and times beyond EOF: decode sequentially and retain
+            # the nearest readable frame, including the first/last at the edges.
+            cap.release()
+            cap = cv2.VideoCapture(str(video_path))
+            best, distance, index = None, float("inf"), 0
+            while True:
+                readable, candidate = cap.read()
+                if not readable:
+                    break
+                candidate_time = index / fps
+                if abs(candidate_time - t_sec) < distance:
+                    best, timestamp = candidate, candidate_time
+                    distance = abs(candidate_time - t_sec)
+                index += 1
+            if best is None:
+                return None
+            frame = best
         ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
         if ok:
             return {"timestamp_sec": timestamp, "image_base64": base64.b64encode(buf).decode("ascii")}
@@ -121,8 +183,11 @@ def frame_b64(video_path, t_sec):
         cap.release()
 
 
-def run_job(job_id, path):
+def run_job(control):
+    path = control.path
     try:
+        if control.finished:
+            return
         cap = cv2.VideoCapture(str(path))
         try:
             if not cap.isOpened() or not cap.read()[0]:
@@ -131,6 +196,8 @@ def run_job(job_id, path):
             cap.release()
         violations = []
         for v in analyze_video(str(path)):
+            if control.finished:
+                return
             t = float(v["timecode_sec"])
             if not math.isfinite(t) or t < 0:
                 raise ValueError("invalid model timecode")
@@ -141,15 +208,15 @@ def run_job(job_id, path):
                 type=v["type"], timecode_sec=t, description=v["description"],
                 rule=v.get("rule", ""), evidence_frames=[frame],
             ).model_dump())
-        db.finish_job(job_id, "done", {"verdict": "violation" if violations else "no_violation",
-                                       "violations": violations})
+        control.finish("done", {"verdict": "violation" if violations else "no_violation",
+                                 "violations": violations})
     except Exception as exc:
         # Model exception text may contain video data or secrets.
         error = str(exc) if isinstance(exc, ValueError) and str(exc) in {
             "video cannot be opened or has no decodable frames", "invalid model timecode",
             "cannot extract evidence frame",
         } else f"analysis failed ({type(exc).__name__})"
-        db.finish_job(job_id, "failed", {"error": error})
+        control.finish("failed", {"error": error})
     finally:
         path.unlink(missing_ok=True)
 
@@ -170,7 +237,13 @@ def _submit(source):
             raise HTTPException(status_code=400, detail="empty file")
         db.create_job(job_id)
         created = True
-        app.state.pool.submit(run_job, job_id, path)
+        control = JobControl(job_id, path)
+        control.future = app.state.pool.submit(run_job, control)
+        with control.lock:
+            if not control.finished:
+                control.timer = threading.Timer(JOB_TIMEOUT_SEC, control.expire)
+                control.timer.daemon = True
+                control.timer.start()
         return {"job_id": job_id}
     except Exception:
         path.unlink(missing_ok=True)
@@ -202,7 +275,12 @@ async def analyze(file: UploadFile = File(...)):
 @app.get("/api/v1/jobs/{job_id}", response_model=JobResponse, response_model_exclude_none=True,
          dependencies=[Depends(check_key)])
 def get_job(job_id: str):
-    return fetch(job_id)
+    result = fetch(job_id)
+    if not INCLUDE_RULE and result["status"] == "done":
+        result = {**result, "violations": [
+            {key: value for key, value in v.items() if key != "rule"}
+            for v in result["violations"]]}
+    return result
 
 
 @app.post("/ui/api/analyze", response_model=Submitted)
