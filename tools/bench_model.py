@@ -5,9 +5,9 @@ from pathlib import Path
 import time
 
 try:
-    from .model_support import ModelCheckError,invoke_model,load_model,offline_guard,quiet_model,timeout_seconds,validate_result,video_duration
+    from .model_support import ModelCheckError,execute_model,load_model,offline_guard,quiet_model,timeout_seconds,validate_result,video_duration
 except ImportError:
-    from model_support import ModelCheckError,invoke_model,load_model,offline_guard,quiet_model,timeout_seconds,validate_result,video_duration
+    from model_support import ModelCheckError,execute_model,load_model,offline_guard,quiet_model,timeout_seconds,validate_result,video_duration
 
 
 def positive(value):
@@ -29,7 +29,7 @@ def workload(function,paths,workers,timeout):
     def one(index):
         started=time.monotonic()
         try:
-            result=invoke_model(function,paths[index],submitted,timeout)
+            result=execute_model(function,paths[index],submitted,timeout)
             validate_result(result,durations[index])
             status='PASS'
         except Exception as exc:

@@ -27,3 +27,16 @@ Steps B-F implementation:
   existing recorded ngrok process is inspected read-only, never stopped/restarted.
 - F: README jury-day recovery/runbook, notebook/checker/benchmark instructions, STATUS.md.
   PowerShell 5.1 parses all scripts; BOM tests cover new scripts too.
+
+Step G live verification so far:
+- Rebuilt/recreated main stack in 10.71s; image 559,619,621 bytes, Linux amd64.
+- Separate localhost-only demo stack with independent Postgres/uploads and a fake test key
+  returned exactly 3 JPEGs through jury and UI routes, timestamps 1.5/2.5/3.5 seconds, all
+  decoded correctly. The public stack never enabled demo. Test containers/volumes removed.
+- Main real HTTP checks, assets, auth, generated uploads and restart persistence passed;
+  .env bytes were unchanged and no secret occurred in static assets.
+- Full suite with live integration: 118 passed before the final package-initializer scan
+  regression was added. Final test result is recorded below.
+- PowerShell 5.1 status ran successfully: api/db healthy, local/public health ok,
+  model_loaded=false, demo_mode=false, workers=1. Recorded ngrok process alive=True.
+  Log output contained approved metadata only. The tunnel was never stopped/reconfigured.

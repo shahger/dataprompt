@@ -26,6 +26,19 @@ class ModelCheckError(Exception):
     pass
 
 
+class OfflineBlocked(ModelCheckError):
+    pass
+
+
+def execute_model(function,path,submitted,timeout):
+    try:
+        return invoke_model(function,path,submitted,timeout)
+    except OfflineBlocked:
+        raise ModelCheckError('offline guard blocked a model network call') from None
+    except Exception:
+        raise ModelCheckError('model execution failed; exception details suppressed') from None
+
+
 def forbidden(name):
     return any(name == prefix or name.startswith(prefix+'.') for prefix in FORBIDDEN) or name.startswith('huggingface_hub.inference') or any(name == 'huggingface_hub.'+item for item in INFERENCE)
 
@@ -34,9 +47,13 @@ def scan_sources(root=ROOT):
     root=Path(root).resolve()
     pending=[root/'model_service.py']; visited=set(); errors=[]; warnings=[]
     def add_module(parts,base=root):
-        target=base.joinpath(*parts.split('.'))
-        for path in [target.with_suffix('.py'),target/'__init__.py']:
-            if path.is_file() and path.resolve().is_relative_to(root): pending.append(path.resolve())
+        segments=parts.strip('.').split('.')
+        for index in range(1,len(segments)+1):
+            target=base.joinpath(*segments[:index])
+            candidates=[target/'__init__.py']
+            if index==len(segments): candidates.append(target.with_suffix('.py'))
+            for path in candidates:
+                if path.is_file() and path.resolve().is_relative_to(root): pending.append(path.resolve())
     while pending:
         path=pending.pop()
         if path in visited or not path.is_file(): continue
@@ -96,13 +113,13 @@ def offline_guard(enabled=True):
     original_connect,original_connect_ex,original_dns=socket.socket.connect,socket.socket.connect_ex,socket.getaddrinfo
     def connect(sock,address):
         if sock.family == getattr(socket,'AF_UNIX',object()): return original_connect(sock,address)
-        if not isinstance(address,tuple) or not loopback(address[0]): raise ModelCheckError('offline guard blocked non-loopback connection')
+        if not isinstance(address,tuple) or not loopback(address[0]): raise OfflineBlocked('offline guard blocked non-loopback connection')
         return original_connect(sock,address)
     def connect_ex(sock,address):
-        if not isinstance(address,tuple) or not loopback(address[0]): raise ModelCheckError('offline guard blocked non-loopback connection')
+        if not isinstance(address,tuple) or not loopback(address[0]): raise OfflineBlocked('offline guard blocked non-loopback connection')
         return original_connect_ex(sock,address)
     def dns(host,*args,**kwargs):
-        if host is not None and not loopback(host): raise ModelCheckError('offline guard blocked non-loopback DNS')
+        if host is not None and not loopback(host): raise OfflineBlocked('offline guard blocked non-loopback DNS')
         return original_dns(host,*args,**kwargs)
     os.environ.update(HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',NO_PROXY='*')
     socket.socket.connect=connect; socket.socket.connect_ex=connect_ex; socket.getaddrinfo=dns
@@ -132,13 +149,20 @@ def load_model(root=ROOT):
     spec=importlib.util.spec_from_file_location('model_service',path)
     module=importlib.util.module_from_spec(spec)
     sys.modules['model_service']=module
-    with quiet_model(): spec.loader.exec_module(module)
-    function=getattr(module,'analyze_video',None)
+    try:
+        with quiet_model():
+            spec.loader.exec_module(module)
+            function=getattr(module,'analyze_video',None)
+    except OfflineBlocked:
+        raise ModelCheckError('offline guard blocked a model import network call') from None
+    except Exception:
+        raise ModelCheckError('model import failed; exception details suppressed') from None
     if not callable(function): raise ModelCheckError('analyze_video is missing or not callable')
     return function,warnings
 
 
 def video_duration(path):
+    if not Path(path).is_file(): raise ModelCheckError('video must be an existing local file')
     cap=cv2.VideoCapture(str(path))
     try:
         fps,count=cap.get(cv2.CAP_PROP_FPS),cap.get(cv2.CAP_PROP_FRAME_COUNT)

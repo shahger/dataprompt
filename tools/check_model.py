@@ -1,13 +1,12 @@
 """Check local notebook inference without FastAPI/Postgres or result payload output."""
 import argparse
-from contextlib import nullcontext
 from pathlib import Path
 import time
 
 try:
-    from .model_support import ModelCheckError,invoke_model,load_model,offline_guard,quiet_model,timeout_seconds,validate_result,video_duration
+    from .model_support import ModelCheckError,execute_model,load_model,offline_guard,quiet_model,timeout_seconds,validate_result,video_duration
 except ImportError:
-    from model_support import ModelCheckError,invoke_model,load_model,offline_guard,quiet_model,timeout_seconds,validate_result,video_duration
+    from model_support import ModelCheckError,execute_model,load_model,offline_guard,quiet_model,timeout_seconds,validate_result,video_duration
 
 
 def main(argv=None):
@@ -27,8 +26,9 @@ def main(argv=None):
                 started=time.monotonic()
                 try:
                     duration=video_duration(path)
-                    with quiet_model(): result=invoke_model(function,path,started,timeout)
-                    count=validate_result(result,duration)
+                    with quiet_model():
+                        result=execute_model(function,path,started,timeout)
+                        count=validate_result(result,duration)
                     elapsed=time.monotonic()-started
                     if elapsed>=timeout: raise ModelCheckError('JOB_TIMEOUT_SEC exceeded')
                     print(f'{index} | {elapsed:.3f} | {count} | PASS')

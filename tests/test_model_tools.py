@@ -88,3 +88,31 @@ def test_offline_guard_blocks_network_and_restores_environment(monkeypatch):
 
 def test_missing_model_message(tmp_path):
     with pytest.raises(model_support.ModelCheckError,match='missing'): model_support.load_model(tmp_path)
+
+
+def test_model_exception_text_is_never_printed(model,video,capsys):
+    def bad(path):
+        raise model_support.ModelCheckError('BASE64_SECRET_PAYLOAD')
+    model(bad)
+    assert check_model.main(['--video',str(video)])==1
+    assert 'BASE64_SECRET_PAYLOAD' not in capsys.readouterr().out
+
+
+def test_checker_imports_a_fake_model_module(tmp_path,video,monkeypatch):
+    import sys
+    original=model_support.load_model
+    (tmp_path/'model_service.py').write_text('def analyze_video(path, deadline=None):\n return []\n',encoding='utf-8')
+    monkeypatch.setattr(check_model,'load_model',lambda:original(tmp_path))
+    previous=sys.modules.get('model_service')
+    try: assert check_model.main(['--video',str(video)])==0
+    finally:
+        if previous is None: sys.modules.pop('model_service',None)
+        else: sys.modules['model_service']=previous
+
+
+def test_scanner_checks_parent_package_initializers(tmp_path):
+    package=tmp_path/'helper_package'; package.mkdir()
+    (tmp_path/'model_service.py').write_text('import helper_package.inference',encoding='utf-8')
+    (package/'inference.py').write_text('VALUE=1',encoding='utf-8')
+    (package/'__init__.py').write_text('import anthropic',encoding='utf-8')
+    assert model_support.scan_sources(tmp_path)[0]

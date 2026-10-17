@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 import zipfile
 
 import requests
@@ -62,8 +63,17 @@ def external_resources(root=ROOT):
     return count
 
 
+def get_public_or_local(url):
+    for attempt in range(3):
+        try:
+            return requests.get(url,headers={'ngrok-skip-browser-warning':'1'},timeout=10)
+        except requests.RequestException:
+            if attempt==2: raise
+            time.sleep(.3)
+
+
 def http_health(base):
-    response=requests.get(base.rstrip('/')+'/health',headers={'ngrok-skip-browser-warning':'1'},timeout=10)
+    response=get_public_or_local(base.rstrip('/')+'/health')
     response.raise_for_status()
     value=response.json()
     if not isinstance(value,dict) or value.get('status')!='ok': raise ValueError('bad health')
@@ -121,7 +131,7 @@ def preflight(allow_stub=False,root=ROOT,public=PUBLIC):
     except Exception: show('local configuration / secret scan','FAIL')
     try:
         http_health(public)
-        response=requests.get(public.rstrip('/')+'/api/v1/jobs/unknown',headers={'ngrok-skip-browser-warning':'1'},timeout=10)
+        response=get_public_or_local(public.rstrip('/')+'/api/v1/jobs/unknown')
         show('public health and unauthenticated API=401','PASS' if response.status_code==401 else 'FAIL')
     except Exception: show('public health and unauthenticated API=401','FAIL')
     try:
@@ -166,9 +176,10 @@ def make_archive(out,root=ROOT):
     return 0
 
 
-def safe_job_logs(text):
+def safe_job_logs(text,secret=''):
     output=[]
     for line in text.splitlines()[-20:]:
+        if secret and secret in line: continue
         start=line.find('{')
         if start<0: continue
         try: record=json.loads(line[start:])
@@ -196,8 +207,12 @@ def status(root=ROOT,public=PUBLIC):
         except Exception: print(label+': unavailable')
     # PowerShell handles process identity; this module never reads ngrok diagnostics/config.
     logs=run(['docker','compose','logs','--no-color','--tail','20','api'],root)
+    try: key=config(root).get('API_KEY','')
+    except Exception: key=''
     print('Last 20 API lines, payload-safe job records only:')
-    for line in safe_job_logs((logs.stdout+logs.stderr).decode('utf-8',errors='replace')): print(line)
+    # If configuration is unavailable, suppress all log text rather than risk a secret.
+    if key:
+        for line in safe_job_logs((logs.stdout+logs.stderr).decode('utf-8',errors='replace'),key): print(line)
     return 0
 
 
