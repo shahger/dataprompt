@@ -63,3 +63,43 @@ A watchdog cannot kill Python threads; cooperate with deadlines and return parti
 For UI testing only, explicitly set the process environment `DEMO_MODE=true` and recreate the
 API. Never enable it for jury use. It works only with no real model, labels its single result
 ДЕМО, warns at startup, and exposes `demo_mode: true`. Unset it and recreate the API afterward.
+
+
+## Local acceptance check and measured worker selection
+
+1. Export notebook inference only into root `model_service.py`; keep training/magics out.
+   Use the template, local `MODEL_DIR`, CPU providers and one-time loading. Put exact verified
+   CPU packages in `requirements-model.txt`, weights in `models/`, and do not commit data/secrets.
+2. Before starting FastAPI, run (repeat --video for several files):
+   `python tools/check_model.py --video C:\data\short.mov --video C:\data\long.mov`.
+   It checks imports and local imported Python files before execution, flags forbidden cloud
+   SDKs, warns on literal URLs without displaying their values, suppresses model stdout/logs,
+   validates finite JSON output and timecodes within duration + 1 second. Empty type/description,
+   unexpected fields and non-string rules fail. The legacy and deadline signatures use the
+   exact shared service invocation helper.
+3. The default Python socket guard blocks non-loopback DNS/connect/connect_ex and sets
+   HF_HUB_OFFLINE=1, TRANSFORMERS_OFFLINE=1, NO_PROXY=*. It wraps import and inference.
+   `--no-offline-guard` is an explicit diagnostic escape hatch, not a deployment setting.
+   This monkeypatch is not an OS sandbox: native libraries/subprocesses can bypass it.
+4. Run `python tools/bench_model.py --videos C:\data\videos --count 5 --workers 1`.
+   Directory entries are sorted MOV files; if N exceeds available files, inputs repeat without
+   copying them. All N submissions share one monotonic submission time and queue-inclusive
+   deadline. The table separates service time and completion since submission; p50/p95 use
+   linear interpolation. Imports are loaded once, not charged per job. HTTP/upload/DB/evidence
+   overhead is excluded, so leave a margin.
+5. Add `--sweep` to actually measure W=1,2,3,4. It repeats N inferences at each worker count.
+   The tool reports the largest safe MEASURED value among 1..4; unmeasured counts are unknown.
+   Do not extrapolate CPU scaling from one worker. Compare last completion against 270 seconds
+   (JOB_TIMEOUT_SEC), not just inference time. The rough queue estimate is ceil(k/W)*T, using
+   T measured under that load. Five simultaneous videos with W=1 need <54 seconds each,
+   plus margin for the jury's 300-second total upload-to-result limit.
+6. Thread tests share the GIL, CPU and model memory. A fast fake/sleeping model is not a CPU
+   benchmark. Threads cannot be killed: a model that ignores its deadline can hang these
+   tools as well as a worker. Warm caches and thread oversubscription affect repeated runs.
+7. Optionally implement `rules_service.py` against local SQLite/JSON in `data/` or local
+   Postgres. lookup_rule fills only absent/blank rules and must be fast, bounded and offline.
+   The tools validate the model contract; they do not build or validate a laws database.
+8. Rebuild the image, run verdict/label evaluation and five-video load tests over real HTTP.
+   The service now returns up to EVIDENCE_FRAMES=3 images around the event, ordered and
+   deduplicated at video edges. This extraction adds CPU overhead after inference.
+   Finish with prepare-handover.ps1; do not finalize jury text while the real model is absent.

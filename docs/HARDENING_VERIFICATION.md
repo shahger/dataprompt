@@ -12,3 +12,18 @@ key values are written or printed. API schema snapshot remains authoritative.
 
 Step A: normalized scripts to UTF-8 BOM + CRLF without changing content, retained the
 user's existing BOM fix, added Git checkout rules and BOM/PowerShell 5.1 parser tests.
+
+Steps B-F implementation:
+- B: 1-3 timestamp-deduplicated JPEGs, centered on the event and ordered; default 3.
+  Short/edge clips may have fewer. Gallery/lightbox show precise per-frame timestamps.
+  Rebuilt via the BOM-preserving frontend script. Targeted evidence/API/encoding suite: 66 passed.
+- C: standalone model checking and thread benchmarks; shared service deadline invocation,
+  local AST traversal, cloud import rejection, hidden-value URL warnings, default Python
+  socket offline guard, finite JSON/type/timecode validation, no result payload output.
+  Optional sweep measures worker counts 1..4 rather than inventing scaling. Fake model tests pass.
+- D: strict preflight, model-guarded document finalization, in-memory HEAD zip inspection
+  before writing, forbidden-file and real-key scans output counts only. Model note retained.
+- E: NoBuild startup option and URLs, status helper with metadata-only log whitelist;
+  existing recorded ngrok process is inspected read-only, never stopped/restarted.
+- F: README jury-day recovery/runbook, notebook/checker/benchmark instructions, STATUS.md.
+  PowerShell 5.1 parses all scripts; BOM tests cover new scripts too.
