@@ -1,25 +1,42 @@
-"""Smoke test of the jury API. Usage: python test_client.py BASE_URL API_KEY path/to/video.mov
-Requires: pip install requests"""
-import sys, time, base64
-import requests
+"""Smoke-test one video and save returned JPEG evidence."""
+import base64
+from pathlib import Path
+import sys
 
-base, key, path = sys.argv[1].rstrip("/"), sys.argv[2], sys.argv[3]
-H = {"X-API-Key": key}
-t0 = time.time()
-with open(path, "rb") as f:
-    r = requests.post(f"{base}/api/v1/analyze", headers=H, files={"file": f})
-r.raise_for_status()
-job = r.json()["job_id"]
-print("job_id:", job)
-while True:
-    j = requests.get(f"{base}/api/v1/jobs/{job}", headers=H).json()
-    if j["status"] != "processing":
-        break
-    time.sleep(2)
-print("status:", j["status"], "| elapsed:", round(time.time() - t0, 1), "s")
-print("verdict:", j.get("verdict"), "| error:", j.get("error"))
-for v in j.get("violations", []):
-    print("-", v["type"], v["timecode_sec"], v["description"])
-    for k, fr in enumerate(v["evidence_frames"]):
-        with open(f"evidence_{job}_{k}.jpg", "wb") as out:
-            out.write(base64.b64decode(fr["image_base64"]))
+try:
+    from .common import ToolError, analyze, parser
+except ImportError:
+    from common import ToolError, analyze, parser
+
+
+def main(argv=None):
+    cli = parser(__doc__)
+    cli.add_argument("video")
+    cli.add_argument("--output-dir", type=Path, default=Path("."))
+    args = cli.parse_args(argv)
+    try:
+        job, duration = analyze(args, args.video)
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        for vi, violation in enumerate(job["violations"]):
+            frames = violation.get("evidence_frames", [])
+            if not 1 <= len(frames) <= 3:
+                raise ToolError("violation must contain 1-3 evidence frames")
+            for fi, frame in enumerate(frames):
+                raw = base64.b64decode(frame["image_base64"], validate=True)
+                if not raw.startswith(b"\xff\xd8") or not raw.endswith(b"\xff\xd9"):
+                    raise ToolError("evidence is not JPEG")
+                destination = args.output_dir / f"evidence_{job['job_id']}_{vi}_{fi}.jpg"
+                destination.write_bytes(raw)
+        print(f"job_id: {job['job_id']} | status: done | verdict: {job['verdict']} | elapsed: {duration:.3f} s")
+        return 0
+    except ToolError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    except (OSError, ValueError, KeyError, TypeError):
+        # Keep invalid base64 and arbitrary response bodies out of error output.
+        print("ERROR: smoke test failed; check connectivity, job status, and evidence schema", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
