@@ -12,3 +12,10 @@ __pycache__
 uploads
 models/*
 !models/.gitkeep
+frontend
+scripts
+.npm-cache
+.vscode
+data/*
+!data/.gitkeep
+.public-session.json

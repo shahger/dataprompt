@@ -10,3 +10,10 @@ models/*
 .test-artifacts/
 uploads/
 evidence_*.jpg
+node_modules/
+frontend/**/dist/
+frontend/**/dist-single/
+.npm-cache/
+.public-session.json
+data/*
+!data/.gitkeep
