@@ -8,3 +8,5 @@ models/*
 *.mov
 .downloads/
 .test-artifacts/
+uploads/
+evidence_*.jpg

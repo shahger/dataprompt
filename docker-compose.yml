@@ -12,16 +12,20 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
 
   api:
     build: .
     ports:
       - "8000:8000"
     environment:
-      API_KEY: ${API_KEY:-change-me}
-      DATABASE_URL: postgresql://app:app@db:5432/app
-      UPLOAD_DIR: /data/uploads
+      API_KEY: ${API_KEY:?Set API_KEY in .env}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://app:app@db:5432/app}
+      UPLOAD_DIR: ${UPLOAD_DIR:-/data/uploads}
       WORKERS: ${WORKERS:-1}
+      INCLUDE_RULE: ${INCLUDE_RULE:-true}
+      JOB_TIMEOUT_SEC: ${JOB_TIMEOUT_SEC:-270}
+      MODEL_DIR: ${MODEL_DIR:-/app/models}
     volumes:
       - uploads:/data/uploads
       - ./models:/app/models:ro
@@ -29,6 +33,12 @@ services:
       db:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).close()"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+      start_period: 15s
 
 volumes:
   pgdata:

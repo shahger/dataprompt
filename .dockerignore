@@ -2,3 +2,13 @@
 __pycache__
 *.mov
 *.pyc
+.env
+.env.*
+!.env.example
+.venv
+.downloads
+.test-artifacts
+.pytest_cache
+uploads
+models/*
+!models/.gitkeep
