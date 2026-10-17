@@ -1,15 +1,8 @@
 /** 44.2 → "00:44.2" (MM:SS.d), от часа — "H:MM:SS.d" */
 export function fmtTimecode(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) sec = 0;
-  const tenths = Math.round(sec * 10);
-  const d = tenths % 10;
-  const total = Math.floor(tenths / 10);
-  const s = total % 60;
-  const m = Math.floor(total / 60) % 60;
-  const h = Math.floor(total / 3600);
-  const mm = String(m).padStart(2, '0');
-  const ss = String(s).padStart(2, '0');
-  return h > 0 ? `${h}:${mm}:${ss}.${d}` : `${mm}:${ss}.${d}`;
+  const total = Math.floor(sec);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
 /** Для проигрывателя: с сотыми долями */

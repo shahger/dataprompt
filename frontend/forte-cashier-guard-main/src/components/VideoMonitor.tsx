@@ -103,7 +103,7 @@ export const VideoMonitor = forwardRef<MonitorHandle, Props>(function VideoMonit
         />
 
         <div className="osd osd--tl mono">
-          <span className={`rec ${playing ? 'is-on' : ''}`} /> CAM 01 · КАССА
+          <span className={`rec ${playing ? 'is-on' : ''}`} /> КАМЕРА 01 · КАССА
         </div>
         <div className="osd osd--tr mono">{fmtPrecise(time)}</div>
         <div className="osd osd--bl mono" title={file.name}>
@@ -123,7 +123,7 @@ export const VideoMonitor = forwardRef<MonitorHandle, Props>(function VideoMonit
             <b>Предпросмотр недоступен</b>
             <span>
               Браузер не смог воспроизвести этот .mov (кодек). На загрузку и анализ это не влияет — файл отправляется как есть.
-              Попробуйте Chrome или Safari.
+              Используйте браузер с поддержкой кодека вашего видео.
             </span>
           </div>
         )}

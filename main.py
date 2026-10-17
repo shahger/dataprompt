@@ -20,6 +20,7 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import db
 
@@ -299,5 +300,19 @@ def health():
     return {"status": "ok", "model_loaded": MODEL_LOADED, "workers": WORKERS}
 
 
+class SPAStaticFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        route_path = path.replace("\\", "/").lstrip("/")
+        # API typos and unavailable assets must remain 404, never return HTML.
+        if route_path == "api" or route_path.startswith("api/") or route_path == "ui/api" or route_path.startswith("ui/api/") or route_path == "health" or route_path.startswith("health/"):
+            raise StarletteHTTPException(status_code=404)
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404 and scope["method"] == "GET" and not route_path.startswith("assets/") and not Path(path).suffix:
+                return await super().get_response("index.html", scope)
+            raise
+
+
 # The catch-all static mount must follow every API route.
-app.mount("/", StaticFiles(directory=ROOT / "static", html=True), name="ui")
+app.mount("/", SPAStaticFiles(directory=ROOT / "static", html=True), name="ui")

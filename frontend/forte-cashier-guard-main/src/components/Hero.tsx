@@ -28,14 +28,14 @@ export function Hero({ phase, disabled, onFile }: Props) {
           <div className="lockup">
             <img src={logo} alt="Forte" />
             <span className="lockup__sep" />
-            <span className="lockup__name">Datathon 26</span>
+            <span className="lockup__name">Дататон 26</span>
           </div>
 
           <h2 className="hero__title">Контроль кассовой дисциплины по видео</h2>
 
           <div className="hero__cols">
-            <p>Загрузите запись кассы в формате .mov — сервис найдёт признаки возможных нарушений</p>
-            <p>Таймкод, кадр-доказательство и ссылка на нормативный документ по каждому событию</p>
+            <p>Загрузите запись кассы в формате .mov — сервис проверит признаки возможных нарушений</p>
+            <p>Таймкод, кадр-доказательство и правило и нормативный документ по каждому событию</p>
           </div>
 
           <div className="hero__cta">
@@ -54,7 +54,7 @@ export function Hero({ phase, disabled, onFile }: Props) {
             <button type="button" className="btn btn--primary btn--lg" disabled={disabled} onClick={() => input.current?.click()}>
               <Icon name="upload" size={18} /> Загрузить видео
             </button>
-            <span className="hero__note">Обработка полностью локальная — без облачных AI-сервисов</span>
+            <span className="hero__note">Обработка полностью локальная — без облачных сервисов искусственного интеллекта</span>
           </div>
         </div>
 
@@ -96,12 +96,12 @@ function HeroArt() {
         <div className="cam__screen">
           <div className="cam__grid" />
           <span className="cam__rec">
-            <i /> CAM 01
+            <i /> КАМЕРА 01
           </span>
           <div className="cam__box">
             <span>Событие</span>
           </div>
-          <span className="cam__time">00:44.2</span>
+          <span className="cam__time">00:00</span>
         </div>
         <div className="cam__bar">
           <span className="cam__play" />

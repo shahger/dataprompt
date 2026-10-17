@@ -90,25 +90,25 @@ export function ResultPanel({ state, sourceLabel, onSeek, onOpenFrame, onRetry }
 
       <dl className="meta">
         <div>
-          <dt>job_id</dt>
+          <dt>Задача</dt>
           <dd className="mono">
             {state.jobId ?? '—'}
             {state.jobId && <CopyButton text={state.jobId} />}
           </dd>
         </div>
         <div>
-          <dt>status</dt>
+          <dt>Состояние</dt>
           <dd className="mono">
             {state.phase === 'idle' && '—'}
-            {state.phase === 'uploading' && 'uploading'}
-            {state.phase === 'processing' && 'processing'}
-            {state.phase === 'done' && 'done'}
-            {state.phase === 'failed' && 'failed'}
+            {state.phase === 'uploading' && 'Загрузка'}
+            {state.phase === 'processing' && 'Обработка'}
+            {state.phase === 'done' && 'Готово'}
+            {state.phase === 'failed' && 'Ошибка'}
           </dd>
         </div>
         <div>
-          <dt>verdict</dt>
-          <dd className="mono">{result?.verdict ?? '—'}</dd>
+          <dt>Вердикт</dt>
+          <dd className="mono">{result?.verdict === 'violation' ? 'Есть признаки' : result?.verdict === 'no_violation' ? 'Не обнаружено' : '—'}</dd>
         </div>
       </dl>
 
@@ -121,7 +121,7 @@ export function ResultPanel({ state, sourceLabel, onSeek, onOpenFrame, onRetry }
             <h3>Здесь появится результат</h3>
             <p>Загрузите видео — сервис покажет по каждому событию:</p>
             <ul>
-              <li><b className="mono">job_id</b> задачи</li>
+              <li>идентификатор задачи</li>
               <li>тип нарушения и описание</li>
               <li>правило и нормативный источник</li>
               <li>таймкод и кадры-доказательства</li>
@@ -151,7 +151,7 @@ export function ResultPanel({ state, sourceLabel, onSeek, onOpenFrame, onRetry }
                   <i />
                 </div>
                 <div className="progress-row mono">
-                  <span>Анализ видео… job_id {state.jobId}</span>
+                  <span>Анализ видео… задача {state.jobId}</span>
                   <b>{fmtElapsed(now - state.processingStartedAt)}</b>
                 </div>
                 <div className="limit mono">
@@ -171,6 +171,7 @@ export function ResultPanel({ state, sourceLabel, onSeek, onOpenFrame, onRetry }
             <div>
               <b>Не удалось получить результат</b>
               <p>{state.error}</p>
+              {state.technicalError && <small className="technical-error">{state.technicalError}</small>}
               <button type="button" className="btn btn--ghost" onClick={onRetry}>
                 <Icon name="refresh" size={16} /> Повторить
               </button>
@@ -199,7 +200,7 @@ export function ResultPanel({ state, sourceLabel, onSeek, onOpenFrame, onRetry }
                 События <em>{violations.length}</em>
               </button>
               <button role="tab" aria-selected={tab === 'json'} className={tab === 'json' ? 'is-on' : ''} onClick={() => setTab('json')}>
-                JSON
+                Ответ сервера
               </button>
             </div>
 
@@ -224,18 +225,9 @@ export function ResultPanel({ state, sourceLabel, onSeek, onOpenFrame, onRetry }
                     <p className="event__desc">{v.description}</p>
 
                     {v.rule && (
-                      <div className={`rule ${v.rule.placeholder ? 'rule--ph' : ''}`}>
-                        <div className="rule__head">
-                          <Icon name="link" size={14} /> Правило и источник
-                          {v.rule.placeholder && <span className="ph">плейсхолдер</span>}
-                        </div>
-                        <div className="rule__doc">{v.rule.document}</div>
-                        <div className="rule__clause">{v.rule.clause}</div>
-                        {v.rule.url && !v.rule.placeholder && (
-                          <a href={v.rule.url} target="_blank" rel="noreferrer noopener">
-                            Открыть источник
-                          </a>
-                        )}
+                      <div className="rule">
+                        <div className="rule__head"><Icon name="link" size={14} /> Правило и источник</div>
+                        <div className="rule__doc">{v.rule}</div>
                       </div>
                     )}
 
@@ -255,7 +247,7 @@ export function ResultPanel({ state, sourceLabel, onSeek, onOpenFrame, onRetry }
             {tab === 'json' && (
               <div className="json">
                 <div className="json__bar">
-                  <span className="json__title mono">GET /api/v1/jobs/{result.job_id}</span>
+                  <span className="json__title mono">Ответ задачи {result.job_id}</span>
                   <CopyButton text={JSON.stringify(result, null, 2)} />
                 </div>
                 <pre className="mono">{jsonFor(state)}</pre>

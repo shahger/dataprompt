@@ -1,114 +1,79 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AnalysisState } from '../lib/types';
-import type { Settings } from '../lib/config';
 import { POLL_INTERVAL_MS, PROCESSING_LIMIT_MS } from '../lib/config';
-import { httpApi } from '../lib/httpApi';
-import { createMockApi } from '../lib/mockApi';
+import { ApiError, httpApi } from '../lib/httpApi';
 
 const initial: AnalysisState = {
-  phase: 'idle',
-  file: null,
-  videoUrl: null,
-  uploadPct: 0,
-  jobId: null,
-  result: null,
-  error: null,
-  startedAt: null,
-  processingStartedAt: null,
+  phase: 'idle', file: null, videoUrl: null, uploadPct: 0, jobId: null, result: null,
+  error: null, technicalError: null, startedAt: null, processingStartedAt: null,
 };
-
 class JobFailedError extends Error {}
-
-const isAbort = (e: unknown) => e instanceof DOMException && e.name === 'AbortError';
+const isAbort = (error: unknown) => error instanceof DOMException && error.name === 'AbortError';
 
 function sleep(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
-    if (signal.aborted) return reject(new DOMException('Aborted', 'AbortError'));
-    const t = window.setTimeout(resolve, ms);
-    signal.addEventListener(
-      'abort',
-      () => {
-        window.clearTimeout(t);
-        reject(new DOMException('Aborted', 'AbortError'));
-      },
-      { once: true },
-    );
+    const abort = () => { window.clearTimeout(timer); reject(new DOMException('Отменено', 'AbortError')); };
+    const timer = window.setTimeout(() => { signal.removeEventListener('abort', abort); resolve(); }, ms);
+    signal.addEventListener('abort', abort, { once: true });
+    if (signal.aborted) { signal.removeEventListener('abort', abort); abort(); }
   });
 }
 
-export function useAnalysis(settings: Settings) {
+export function useAnalysis() {
   const [state, setState] = useState<AnalysisState>(initial);
   const abortRef = useRef<AbortController | null>(null);
   const urlRef = useRef<string | null>(null);
-
   const cleanup = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
     if (urlRef.current) URL.revokeObjectURL(urlRef.current);
     urlRef.current = null;
   }, []);
-
   useEffect(() => cleanup, [cleanup]);
+  const reset = useCallback(() => { cleanup(); setState(initial); }, [cleanup]);
 
-  const reset = useCallback(() => {
+  const start = useCallback(async (file: File) => {
     cleanup();
-    setState(initial);
-  }, [cleanup]);
-
-  const start = useCallback(
-    async (file: File) => {
-      cleanup();
-      const ctrl = new AbortController();
-      abortRef.current = ctrl;
-      const url = URL.createObjectURL(file);
-      urlRef.current = url;
-
-      setState({ ...initial, phase: 'uploading', file, videoUrl: url, startedAt: Date.now() });
-
-      const api = settings.source === 'mock' ? createMockApi(settings.scenario) : httpApi;
-      try {
-        const jobId = await api.submit(
-          file,
-          (p) => setState((s) => ({ ...s, uploadPct: p })),
-          ctrl.signal,
-        );
-        const t0 = Date.now();
-        setState((s) => ({ ...s, phase: 'processing', jobId, uploadPct: 1, processingStartedAt: t0 }));
-
-        let failures = 0;
-        for (;;) {
-          await sleep(POLL_INTERVAL_MS, ctrl.signal);
-          if (Date.now() - t0 > PROCESSING_LIMIT_MS) {
-            throw new Error('Превышен лимит обработки (5 минут). Видео считается необработанным.');
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    const url = URL.createObjectURL(file);
+    urlRef.current = url;
+    const startedAt = Date.now();
+    let timedOut = false;
+    const timer = window.setTimeout(() => { timedOut = true; ctrl.abort(); }, PROCESSING_LIMIT_MS);
+    setState({ ...initial, phase: 'uploading', file, videoUrl: url, startedAt });
+    try {
+      const jobId = await httpApi.submit(file, (pct) => {
+        if (!ctrl.signal.aborted) setState((s) => ({ ...s, uploadPct: pct }));
+      }, ctrl.signal);
+      if (ctrl.signal.aborted) throw new DOMException('Отменено', 'AbortError');
+      setState((s) => ({ ...s, phase: 'processing', jobId, uploadPct: 1, processingStartedAt: Date.now() }));
+      let failures = 0;
+      for (;;) {
+        await sleep(POLL_INTERVAL_MS, ctrl.signal);
+        try {
+          const result = await httpApi.getJob(jobId, ctrl.signal);
+          failures = 0;
+          if (result.status === 'done') {
+            setState((s) => ({ ...s, phase: 'done', result }));
+            return;
           }
-          try {
-            const r = await api.getJob(jobId, ctrl.signal);
-            failures = 0;
-            if (r.status === 'done') {
-              setState((s) => ({ ...s, phase: 'done', result: r }));
-              return;
-            }
-            if (r.status === 'failed') {
-              throw new JobFailedError(r.error || 'Сервис не смог обработать это видео');
-            }
-          } catch (e) {
-            if (isAbort(e)) throw e;
-            // единичные сетевые сбои при опросе терпим, но не бесконечно
-            if (e instanceof JobFailedError) throw e;
-            if (++failures >= 3) throw e;
-          }
+          if (result.status === 'failed') throw new JobFailedError(result.error || 'Неизвестная ошибка обработки');
+        } catch (error) {
+          if (isAbort(error) || error instanceof JobFailedError) throw error;
+          if (!(error instanceof ApiError) || !error.retryable || ++failures >= 3) throw error;
         }
-      } catch (e) {
-        if (isAbort(e)) return;
-        setState((s) => ({
-          ...s,
-          phase: 'failed',
-          error: e instanceof Error ? e.message : 'Неизвестная ошибка',
-        }));
       }
-    },
-    [cleanup, settings.source, settings.scenario],
-  );
-
+    } catch (error) {
+      if (isAbort(error) && !timedOut) return;
+      const jobFailed = error instanceof JobFailedError;
+      setState((s) => ({ ...s, phase: 'failed',
+        error: timedOut ? 'Превышено время ожидания — 5 минут с начала загрузки. Попробуйте позже или загрузите видео меньшего размера.'
+          : jobFailed ? 'Не удалось обработать видео. Проверьте файл и повторите попытку.'
+          : error instanceof ApiError ? error.message : 'Не удалось связаться с сервисом. Повторите попытку.',
+        technicalError: jobFailed ? error.message : null,
+      }));
+    } finally { window.clearTimeout(timer); }
+  }, [cleanup]);
   return { state, start, reset };
 }

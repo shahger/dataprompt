@@ -10,8 +10,8 @@ export function SiteFooter({ onReset, canReset }: { onReset: () => void; canRese
               <img src={markImg} alt="" />
             </span>
             <div>
-              <b>ForteBank · Datathon 26</b>
-              <span>AI-сервис выявления нарушений кассовой дисциплины по видеозаписям</span>
+              <b>Форте Банк · Дататон 26</b>
+              <span>Сервис выявления нарушений кассовой дисциплины по видеозаписям</span>
             </div>
           </div>
           {canReset && (

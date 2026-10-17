@@ -12,22 +12,12 @@ export interface EvidenceFrame {
   image_base64: string;
 }
 
-export interface NormativeRef {
-  /** Название документа (НПА РК: НБРК, adilet.zan.kz) */
-  document: string;
-  /** Пункт / раздел */
-  clause: string;
-  url?: string;
-  /** true — это заглушка, а не реальная ссылка */
-  placeholder?: boolean;
-}
-
 export interface Violation {
   type: string;
   timecode_sec: number;
   description: string;
   evidence_frames: EvidenceFrame[];
-  rule?: NormativeRef;
+  rule?: string;
 }
 
 export interface JobResult {
@@ -54,6 +44,7 @@ export interface AnalysisState {
   jobId: string | null;
   result: JobResult | null;
   error: string | null;
+  technicalError: string | null;
   /** Date.now() начала загрузки */
   startedAt: number | null;
   /** Date.now() начала обработки (после получения job_id) */

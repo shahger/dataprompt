@@ -375,3 +375,5 @@ code { font-family: var(--mono); font-size: 0.9em; background: var(--tile); padd
   html { scroll-behavior: auto; }
   .rec.is-on, .bar--indet i { animation: none; }
 }
+.technical-error { display: block; margin: 8px 0; overflow-wrap: anywhere; font-size: 12px; opacity: .8; }
+.rule__doc { white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -79,7 +79,7 @@ export function UploadZone({ onFile, compact, disabled, error }: Props) {
           <Icon name="alert" size={16} /> <span>{error}</span>
         </div>
       )}
-      <div className="dropzone__foot">Видео не покидает контур банка · анализ строго визуальный</div>
+      <div className="dropzone__foot">Анализ на компьютере сервиса · анализ строго визуальный</div>
     </div>
   );
 }

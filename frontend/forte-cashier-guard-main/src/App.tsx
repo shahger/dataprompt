@@ -8,7 +8,6 @@ import { FrameLightbox } from './components/FrameLightbox';
 import { InfoCards } from './components/InfoCards';
 import { SiteFooter } from './components/SiteFooter';
 import { useAnalysis } from './hooks/useAnalysis';
-import { loadSettings, saveSettings, type Settings } from './lib/config';
 import { validateVideo } from './lib/validate';
 import type { Violation } from './lib/types';
 import { fmtBytes } from './lib/format';
@@ -19,19 +18,13 @@ interface LightboxState {
 }
 
 export default function App() {
-  const [settings, setSettings] = useState<Settings>(loadSettings);
-  const { state, start, reset } = useAnalysis(settings);
+  const { state, start, reset } = useAnalysis();
   const [fileError, setFileError] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
   const monitor = useRef<MonitorHandle>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
 
   const busy = state.phase === 'uploading' || state.phase === 'processing';
-
-  const updateSettings = (s: Settings) => {
-    setSettings(s);
-    saveSettings(s);
-  };
 
   const handleFile = useCallback(
     (file: File) => {
@@ -58,7 +51,7 @@ export default function App() {
   }, []);
 
   const violations = useMemo(() => state.result?.violations ?? [], [state.result]);
-  const sourceLabel = settings.source === 'mock' ? 'Заглушка · плейсхолдеры' : 'Реальный API';
+  const sourceLabel = 'Локальная обработка';
 
   const retry = () => {
     if (state.file) void start(state.file);
@@ -66,7 +59,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <TopBar settings={settings} onSettings={updateSettings} locked={busy} />
+      <TopBar />
 
       <main>
         <Hero phase={state.phase} disabled={busy} onFile={handleFile} />
@@ -106,7 +99,7 @@ export default function App() {
                   {state.file && state.videoUrl ? (
                     <VideoMonitor ref={monitor} url={state.videoUrl} file={state.file} violations={violations} />
                   ) : (
-                    <UploadZone onFile={handleFile} error={fileError} />
+                    <UploadZone onFile={handleFile} error={fileError} disabled={busy} />
                   )}
                 </div>
               </section>

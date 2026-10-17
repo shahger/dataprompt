@@ -39,7 +39,7 @@ def test_auth(service, video, headers):
 def test_health_ui_and_unknown(service):
     _, client, _ = service
     assert client.get("/health").json() == {"status": "ok", "model_loaded": False, "workers": 1}
-    assert "Cash discipline" in client.get("/").text
+    assert "Контроль кассовой дисциплины" in client.get("/").text
     for prefix, headers in [("/api/v1", HEADERS), ("/ui/api", {})]:
         assert client.get(prefix + "/jobs/unknown", headers=headers).status_code == 404
         assert client.post(prefix + "/analyze", headers=headers).status_code == 422
