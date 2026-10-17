@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 import hmac
 import importlib.util
-import inspect
 import json
 import logging
 import math
@@ -24,6 +23,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import db
+from model_contract import invoke_model
 
 log = logging.getLogger("uvicorn.error")
 ROOT = Path(__file__).resolve().parent
@@ -34,6 +34,9 @@ MAX_BYTES = 200 * 1024 * 1024
 INCLUDE_RULE = os.environ.get("INCLUDE_RULE", "true").lower() == "true"
 RULE_IN_DESCRIPTION = os.environ.get("RULE_IN_DESCRIPTION", "true").lower() == "true"
 JOB_TIMEOUT_SEC = float(os.environ.get("JOB_TIMEOUT_SEC", "270"))
+EVIDENCE_FRAMES = int(os.environ.get("EVIDENCE_FRAMES", "3"))
+if not 1 <= EVIDENCE_FRAMES <= 3:
+    raise ValueError("EVIDENCE_FRAMES must be an integer from 1 to 3")
 DEMO_REQUESTED = os.environ.get("DEMO_MODE", "false").lower() == "true"
 
 if importlib.util.find_spec("model_service") is not None:
@@ -44,7 +47,13 @@ else:
 
     def analyze_video(path):
         if DEMO_REQUESTED:
-            return [{"type": "ДЕМО", "timecode_sec": 0.0,
+            capture = cv2.VideoCapture(str(path))
+            try:
+                fps, count = capture.get(cv2.CAP_PROP_FPS), capture.get(cv2.CAP_PROP_FRAME_COUNT)
+                timestamp = (count - 1) / fps / 2 if math.isfinite(fps) and fps > 0 and math.isfinite(count) and count >= 1 else 0.0
+            finally:
+                capture.release()
+            return [{"type": "ДЕМО", "timecode_sec": timestamp,
                      "description": "Демонстрационный результат, не настоящий анализ", "rule": "—"}]
         return []
 
@@ -202,6 +211,33 @@ def frame_b64(video_path, t_sec):
         cap.release()
 
 
+def evidence_frames(video_path, timecode_sec):
+    cap = cv2.VideoCapture(str(video_path))
+    try:
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+    finally:
+        cap.release()
+    last_time = (count - 1) / fps if math.isfinite(fps) and fps > 0 and math.isfinite(count) and count >= 1 else None
+
+    def clamp(timestamp):
+        return max(0.0, min(timestamp, last_time)) if last_time is not None else max(0.0, timestamp)
+
+    # Extract the event frame first so the selected set always contains it.
+    center = frame_b64(video_path, clamp(timecode_sec))
+    if center is None:
+        return []
+    frames = [center]
+    candidates = [timecode_sec - 1.0, timecode_sec + 1.0]
+    for target in candidates:
+        if len(frames) >= EVIDENCE_FRAMES:
+            break
+        frame = frame_b64(video_path, clamp(target))
+        if frame and not any(abs(frame["timestamp_sec"] - previous["timestamp_sec"]) < 1e-6 for previous in frames):
+            frames.append(frame)
+    return sorted(frames, key=lambda frame: frame["timestamp_sec"])
+
+
 def run_job(control):
     path = control.path
     try:
@@ -216,26 +252,15 @@ def run_job(control):
         violations = []
         # Legacy one-argument notebook exports remain compatible. A model with
         # deadline can return partial results before the queue-inclusive timeout.
-        deadline = control.submitted + JOB_TIMEOUT_SEC - min(10.0, JOB_TIMEOUT_SEC * 0.1)
-        try:
-            parameter = inspect.signature(analyze_video).parameters.get("deadline")
-        except (TypeError, ValueError):
-            parameter = None
-        if parameter is not None:
-            if parameter.kind == inspect.Parameter.POSITIONAL_ONLY:
-                predictions = analyze_video(str(path), deadline)
-            else:
-                predictions = analyze_video(str(path), deadline=deadline)
-        else:
-            predictions = analyze_video(str(path))
+        predictions = invoke_model(analyze_video, path, control.submitted, JOB_TIMEOUT_SEC)
         for v in predictions:
             if control.finished:
                 return
             t = float(v["timecode_sec"])
             if not math.isfinite(t) or t < 0:
                 raise ValueError("invalid model timecode")
-            frame = frame_b64(path, t)
-            if frame is None:
+            frames = evidence_frames(path, t)
+            if not frames:
                 raise ValueError("cannot extract evidence frame")
             rule = v.get("rule") or ""
             if not rule.strip():
@@ -247,7 +272,7 @@ def run_job(control):
                     log.warning("rules_lookup_failed job_id=%s", control.job_id)
             violations.append(Violation(
                 type=v["type"], timecode_sec=t, description=v["description"],
-                rule=rule, evidence_frames=[frame],
+                rule=rule, evidence_frames=frames,
             ).model_dump())
         control.finish("done", {"verdict": "violation" if violations else "no_violation",
                                  "violations": violations})

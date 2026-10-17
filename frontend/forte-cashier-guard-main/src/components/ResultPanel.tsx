@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { AnalysisState, Violation } from '../lib/types';
 import { PROCESSING_LIMIT_MS } from '../lib/config';
-import { fmtBytes, fmtElapsed, fmtTimecode } from '../lib/format';
+import { fmtBytes, fmtElapsed, fmtPrecise, fmtTimecode } from '../lib/format';
 import { Icon } from './Icon';
 
 interface Props {
@@ -231,11 +231,11 @@ export function ResultPanel({ state, sourceLabel, onSeek, onOpenFrame, onRetry }
                       </div>
                     )}
 
-                    <div className="frames">
+                    <div className="frames" role="group" aria-label={`Кадры-доказательства: ${v.evidence_frames.length}`}>
                       {v.evidence_frames.map((f, j) => (
                         <button key={j} type="button" className="frame" onClick={() => onOpenFrame(v, j)} aria-label={`Открыть кадр ${j + 1}`}>
-                          <img src={`data:image/jpeg;base64,${f.image_base64}`} alt="" />
-                          <span className="mono">{fmtTimecode(f.timestamp_sec)}</span>
+                          <img src={`data:image/jpeg;base64,${f.image_base64}`} alt={`Кадр на ${fmtPrecise(f.timestamp_sec)}`} />
+                          <span className="mono">{fmtPrecise(f.timestamp_sec)}</span>
                         </button>
                       ))}
                     </div>

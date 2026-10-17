@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { EvidenceFrame } from '../lib/types';
-import { fmtTimecode } from '../lib/format';
+import { fmtPrecise } from '../lib/format';
 import { Icon } from './Icon';
 
 interface Props {
@@ -39,7 +39,7 @@ export function FrameLightbox({ title, frames, index, onIndex, onClose }: Props)
             <div className="label mono">КАДР-ДОКАЗАТЕЛЬСТВО · {index + 1}/{frames.length}</div>
             <b>{title}</b>
           </div>
-          <span className="mono tc">{fmtTimecode(frame.timestamp_sec)}</span>
+          <span className="mono tc">{fmtPrecise(frame.timestamp_sec)}</span>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Закрыть" autoFocus>
             <Icon name="close" />
           </button>
@@ -54,7 +54,7 @@ export function FrameLightbox({ title, frames, index, onIndex, onClose }: Props)
           >
             <Icon name="chevL" size={22} />
           </button>
-          <img src={`data:image/jpeg;base64,${frame.image_base64}`} alt={`Кадр на ${fmtTimecode(frame.timestamp_sec)}`} />
+          <img src={`data:image/jpeg;base64,${frame.image_base64}`} alt={`Кадр на ${fmtPrecise(frame.timestamp_sec)}`} />
           <button
             type="button"
             className="icon-btn icon-btn--lg"

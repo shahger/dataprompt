@@ -26,6 +26,7 @@ services:
       INCLUDE_RULE: ${INCLUDE_RULE:-true}
       RULE_IN_DESCRIPTION: ${RULE_IN_DESCRIPTION:-true}
       JOB_TIMEOUT_SEC: ${JOB_TIMEOUT_SEC:-270}
+      EVIDENCE_FRAMES: ${EVIDENCE_FRAMES:-3}
       MODEL_DIR: ${MODEL_DIR:-/app/models}
       DEMO_MODE: ${DEMO_MODE:-false}
     volumes:

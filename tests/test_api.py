@@ -138,8 +138,8 @@ def test_evidence_fallback(service, video, monkeypatch, timecode):
     job = wait_job(client, upload(client, video).json()["job_id"])
     assert job["status"] == "done"
     evidence = job["violations"][0]["evidence_frames"]
-    assert len(evidence) == 1
-    assert evidence[0]["timestamp_sec"] == pytest.approx(0.9)
+    assert 1 <= len(evidence) <= 3
+    assert any(frame["timestamp_sec"] == pytest.approx(0.9) for frame in evidence)
     assert cv2.imdecode(np.frombuffer(base64.b64decode(evidence[0]["image_base64"]), np.uint8), 1) is not None
 
 
