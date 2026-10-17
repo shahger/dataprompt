@@ -1,0 +1,2 @@
+# Preserve PowerShell UTF-8 BOM bytes; use Windows-friendly checkout endings.
+*.ps1 text eol=crlf

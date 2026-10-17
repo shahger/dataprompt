@@ -1,4 +1,4 @@
-param()
+﻿param()
 $ErrorActionPreference = 'Stop'
 $project = Split-Path $PSScriptRoot -Parent
 $sessionFile = Join-Path $project '.public-session.json'

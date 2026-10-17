@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Domain = 'reverence-culpable-cupping.ngrok-free.dev',
     [string]$NgrokPath = 'C:\Users\shakh\AppData\Local\Microsoft\WinGet\Packages\Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe\ngrok.exe'
 )
