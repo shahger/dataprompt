@@ -1,4 +1,5 @@
 ﻿param(
+    [switch]$NoBuild,
     [string]$Domain = 'reverence-culpable-cupping.ngrok-free.dev',
     [string]$NgrokPath = 'C:\Users\shakh\AppData\Local\Microsoft\WinGet\Packages\Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe\ngrok.exe'
 )
@@ -27,7 +28,9 @@ try {
     $dockerCheck = & docker info --format '{{.ServerVersion}}' 2>&1
     if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop не готов. Запустите Linux engine и повторите команду.' }
     # Compose reads .env itself. This script never opens or prints it.
-    & docker compose up -d --build
+    $composeArguments = @('compose', 'up', '-d')
+    if ($NoBuild) { $composeArguments += '--no-build' } else { $composeArguments += '--build' }
+    & docker @composeArguments
     if ($LASTEXITCODE -ne 0) { throw 'Не удалось собрать или запустить Docker Compose.' }
     $ready = $false
     $until = (Get-Date).AddMinutes(3)
@@ -57,6 +60,9 @@ try {
         $stderr = $process.StandardError.ReadToEndAsync()
         @{ pid = $process.Id; startedTicks = $process.StartTime.ToUniversalTime().Ticks; executable = $executable; domain = $Domain } |
             ConvertTo-Json | Set-Content -LiteralPath $sessionFile -Encoding UTF8
+        Write-Host "Публичный интерфейс: https://$Domain/"
+        Write-Host 'Локальный интерфейс: http://localhost:8000/'
+        Write-Host 'Инспектор ngrok: http://127.0.0.1:4040'
         try {
             while (-not $process.WaitForExit(1000)) { }
             $diagnostic = $stdout.GetAwaiter().GetResult() + $stderr.GetAwaiter().GetResult()
