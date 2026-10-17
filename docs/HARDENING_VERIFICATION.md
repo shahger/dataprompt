@@ -40,3 +40,24 @@ Step G live verification so far:
 - PowerShell 5.1 status ran successfully: api/db healthy, local/public health ok,
   model_loaded=false, demo_mode=false, workers=1. Recorded ngrok process alive=True.
   Log output contained approved metadata only. The tunnel was never stopped/reconfigured.
+
+Final hardening checks:
+- Full suite including live HTTP integration: 119 passed, one existing Starlette/httpx
+  deprecation warning, 10.05 seconds. API schema snapshot was not regenerated.
+- Windows PowerShell 5.1 executed status, preflight and archive scripts successfully.
+- prepare-handover -AllowStub exited 1 as intended: model readiness WARN; dirty Git FAIL
+  (only the pre-existing .vscode/ remains untracked), pre-model jury note FAIL. Containers,
+  key length/config, strict INCLUDE_RULE, tracked-file secret scan (0), public health/401,
+  and static external-resource scan (0) all passed. The note was not removed without a model.
+- HEAD archive passed: forbidden_entries=0, secret_matches=0; first output 447,803 bytes.
+  All eight archived scripts had UTF-8 BOM. Archive is regenerated from final HEAD below.
+- Real model checker/benchmark report the intended missing-model error on this repository.
+  Fake good/slow/malformed/forbidden modules, deadline signatures and offline blocking are
+  tested. No real inference/accuracy/laws benchmark is claimed.
+- The isolated evidence demo has been fully removed. The normal stack remains running,
+  model_loaded=false, demo_mode=false, with no retained uploads. Ngrok was untouched.
+
+Final end-of-task rebuild completed in 8.59 seconds (cached requirements), image
+559,634,460 bytes, Linux amd64. Runtime code is the final committed implementation;
+only verification notes were updated after the image build. No model/rules implementation
+or dependency was added. The clean archive will be regenerated from the final commit.

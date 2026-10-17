@@ -31,8 +31,13 @@ requirements-model layer are ready. Empty model/data mounts work.
 ## Verified and pending
 
 Previous stage: 60 tests plus real HTTP, UI upload, assets, auth and restart persistence verified.
-Current stage adds evidence, diagnostics, archive/preflight and PowerShell 5.1 tests. Detailed
-current results are recorded in docs/HARDENING_VERIFICATION.md after the final run.
+Current hardening verification: 119 tests passed including live HTTP integration. Three JPEGs
+decoded through both API route families on an isolated localhost demo stack; that stack was
+removed. Real main-stack auth/assets/upload/restart persistence passed. PowerShell 5.1 parsing,
+status, preflight and clean archive were exercised. The archive scan found zero forbidden
+entries/secret matches. Preflight intentionally fails on the retained pre-model note and
+user-owned untracked .vscode/, with model readiness WARN under AllowStub. Details are recorded
+in docs/HARDENING_VERIFICATION.md.
 Pending: Alfia's real model, local law sources, license/source review, labeled accuracy and
 several-video CPU throughput on the Intel i5-13500. The user-owned untracked .vscode/ is
 untouched; it makes strict preflight's clean-tree check fail until the user resolves it.
