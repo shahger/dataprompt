@@ -66,3 +66,35 @@ def test_labels_timestamp_parsing():
 
 def test_missing_dataset_is_nonzero(tmp_path):
     assert eval_labels.main(["http://localhost:8000", "test", str(tmp_path)]) == 1
+from tools import check_public
+
+
+def test_public_check_without_video_never_reads_key(monkeypatch, capsys):
+    class Response:
+        status_code = 401
+        def raise_for_status(self): pass
+        def json(self): return {'status': 'ok'}
+    monkeypatch.setattr(check_public.requests, 'get', lambda *a, **k: Response())
+    def forbidden():
+        raise AssertionError('key should not be read')
+    monkeypatch.setattr(check_public, 'read_api_key', forbidden)
+    assert check_public.main(['--base-url', 'http://localhost:8000']) == 0
+    assert '401' in capsys.readouterr().out
+
+
+def test_public_video_check_keeps_key_in_process(monkeypatch, tmp_path, capsys):
+    class Response:
+        status_code = 401
+        def raise_for_status(self): pass
+        def json(self): return {'status': 'ok'}
+    monkeypatch.setattr(check_public.requests, 'get', lambda *a, **k: Response())
+    monkeypatch.setattr(check_public, 'read_api_key', lambda: 'private-test-key')
+    called = []
+    def smoke(argv):
+        called.append(argv)
+        return 0
+    monkeypatch.setattr(check_public.test_client, 'main', smoke)
+    assert check_public.main(['--base-url', 'http://localhost:8000', '--video', str(tmp_path / 'tiny.mov')]) == 0
+    assert called[0][1] == 'private-test-key'
+    captured = capsys.readouterr()
+    assert 'private-test-key' not in captured.out + captured.err

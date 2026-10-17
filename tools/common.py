@@ -1,6 +1,7 @@
 """Shared HTTP plumbing; deliberately never print response bodies or credentials."""
 import argparse
 import math
+import os
 from pathlib import Path
 import time
 from urllib.parse import urlsplit
@@ -37,6 +38,8 @@ def analyze(args, path):
     started = time.monotonic()
     deadline = started + args.timeout
     headers = {"X-API-Key": args.api_key}
+    if os.environ.get("CASHIER_SKIP_BROWSER_WARNING") == "1":
+        headers["ngrok-skip-browser-warning"] = "1"
 
     def request(session, method, endpoint, **kwargs):
         remaining = deadline - time.monotonic()
