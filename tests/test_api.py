@@ -224,3 +224,23 @@ def test_persisted_result_and_interrupted_upload_on_restart(service, video):
         assert restarted.get("/api/v1/jobs/" + job["job_id"], headers=HEADERS).json() == job
         assert restarted.get("/api/v1/jobs/interrupted", headers=HEADERS).json()["status"] == "failed"
         assert not orphan.exists()
+
+
+@pytest.mark.parametrize('include_rule', [True, False])
+@pytest.mark.parametrize('rule_in_description', [True, False])
+@pytest.mark.parametrize('rule', ['Документ, пункт: проверенное правило', '', '   '])
+def test_jury_rule_description_is_separate_from_ui(service, video, monkeypatch, include_rule, rule_in_description, rule):
+    module, client, _ = service
+    monkeypatch.setattr(module, 'INCLUDE_RULE', include_rule)
+    monkeypatch.setattr(module, 'RULE_IN_DESCRIPTION', rule_in_description)
+    monkeypatch.setattr(module, 'analyze_video', lambda path: [{
+        'type': 'test', 'timecode_sec': 0, 'description': 'Описание', 'rule': rule}])
+    job = wait_job(client, upload(client, video).json()['job_id'])
+    violation = job['violations'][0]
+    appended = not include_rule and rule_in_description and bool(rule.strip())
+    assert violation['description'] == 'Описание' + (f' Правило: {rule}' if appended else '')
+    assert ('rule' in violation) == include_rule
+    ui = client.get('/ui/api/jobs/' + job['job_id']).json()['violations'][0]
+    assert ui['description'] == 'Описание'
+    assert ui['rule'] == rule
+    assert client.get('/api/v1/jobs/' + job['job_id'], headers=HEADERS).json() == job

@@ -31,6 +31,7 @@ UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", str(ROOT / "uploads")))
 WORKERS = int(os.environ.get("WORKERS", "1"))
 MAX_BYTES = 200 * 1024 * 1024
 INCLUDE_RULE = os.environ.get("INCLUDE_RULE", "true").lower() == "true"
+RULE_IN_DESCRIPTION = os.environ.get("RULE_IN_DESCRIPTION", "true").lower() == "true"
 JOB_TIMEOUT_SEC = float(os.environ.get("JOB_TIMEOUT_SEC", "270"))
 
 if importlib.util.find_spec("model_service") is not None:
@@ -279,9 +280,14 @@ async def analyze(file: UploadFile = File(...)):
 def get_job(job_id: str):
     result = fetch(job_id)
     if not INCLUDE_RULE and result["status"] == "done":
-        result = {**result, "violations": [
-            {key: value for key, value in v.items() if key != "rule"}
-            for v in result["violations"]]}
+        violations = []
+        for original in result["violations"]:
+            violation = {key: value for key, value in original.items() if key != "rule"}
+            rule = original.get("rule") or ""
+            if RULE_IN_DESCRIPTION and rule.strip():
+                violation["description"] += f" Правило: {rule}"
+            violations.append(violation)
+        result = {**result, "violations": violations}
     return result
 
 
