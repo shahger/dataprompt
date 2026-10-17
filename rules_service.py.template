@@ -1,0 +1,12 @@
+"""Optional offline rules adapter. Copy to rules_service.py when local data is ready.
+
+lookup_rule(violation_type) -> {"rule": "document, clause, text"} or None.
+Read a local SQLite/JSON file in /app/data, or an existing Postgres table.
+No network services, invented regulations, or runtime data downloads.
+Thread safety is required when WORKERS > 1. Keep lookups fast and bounded.
+"""
+
+
+def lookup_rule(violation_type: str) -> dict | None:
+    # TODO: query Alfia's local, verified regulations and return the matching text.
+    return None

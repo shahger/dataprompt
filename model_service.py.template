@@ -31,13 +31,14 @@ def iter_frames(path, sample_fps=SAMPLE_FPS):
         cap.release()
 
 
-def analyze_video(path):
+def analyze_video(path, deadline=None):
     start = time.monotonic()
+    deadline = min(deadline if deadline is not None else float("inf"), start + JOB_BUDGET_SEC)
     found = []
     from contextlib import closing
     with closing(iter_frames(path)) as frames:
         for t, frame in frames:
-            if time.monotonic() - start > JOB_BUDGET_SEC:
+            if time.monotonic() >= deadline:
                 break
             # TODO: run the model on `frame`; when an event is detected:
             # found.append({"type": "...", "timecode_sec": t, "description": "...", "rule": "..."})

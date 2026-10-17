@@ -1,0 +1,1 @@
+# Add only verified, pinned CPU inference dependencies here; no GPU or cloud SDKs.

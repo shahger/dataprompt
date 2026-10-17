@@ -59,8 +59,10 @@ def service(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "db", fake)
     monkeypatch.delitem(sys.modules, "main", raising=False)
     monkeypatch.setenv("API_KEY", "unit-test-key")
+    monkeypatch.delenv("DEMO_MODE", raising=False)
     monkeypatch.setenv("UPLOAD_DIR", str(tmp_path / "uploads"))
     module = importlib.import_module("main")
+    module.original_stub = module.analyze_video
     monkeypatch.setattr(module, "analyze_video", lambda path: [])
     with TestClient(module.app) as client:
         yield module, client, fake

@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 import hmac
 import importlib.util
+import inspect
 import json
 import logging
 import math
@@ -33,6 +34,7 @@ MAX_BYTES = 200 * 1024 * 1024
 INCLUDE_RULE = os.environ.get("INCLUDE_RULE", "true").lower() == "true"
 RULE_IN_DESCRIPTION = os.environ.get("RULE_IN_DESCRIPTION", "true").lower() == "true"
 JOB_TIMEOUT_SEC = float(os.environ.get("JOB_TIMEOUT_SEC", "270"))
+DEMO_REQUESTED = os.environ.get("DEMO_MODE", "false").lower() == "true"
 
 if importlib.util.find_spec("model_service") is not None:
     from model_service import analyze_video
@@ -41,7 +43,18 @@ else:
     MODEL_LOADED = False
 
     def analyze_video(path):
+        if DEMO_REQUESTED:
+            return [{"type": "ДЕМО", "timecode_sec": 0.0,
+                     "description": "Демонстрационный результат, не настоящий анализ", "rule": "—"}]
         return []
+
+
+DEMO_MODE = DEMO_REQUESTED and not MODEL_LOADED
+if importlib.util.find_spec("rules_service") is not None:
+    from rules_service import lookup_rule
+else:
+    def lookup_rule(violation_type):
+        return None
 
 
 class ContractModel(BaseModel):
@@ -99,6 +112,8 @@ async def lifespan(app):
     app.state.pool = pool
     if not MODEL_LOADED:
         log.warning("model_service.py absent: stub returns no_violation")
+    if DEMO_MODE:
+        log.warning("DEMO MODE ENABLED: SYNTHETIC RESULTS ONLY; NO REAL ANALYSIS")
     try:
         yield
     finally:
@@ -198,7 +213,21 @@ def run_job(control):
         finally:
             cap.release()
         violations = []
-        for v in analyze_video(str(path)):
+        # Legacy one-argument notebook exports remain compatible. A model with
+        # deadline can return partial results before the queue-inclusive timeout.
+        deadline = control.submitted + JOB_TIMEOUT_SEC - min(10.0, JOB_TIMEOUT_SEC * 0.1)
+        try:
+            parameter = inspect.signature(analyze_video).parameters.get("deadline")
+        except (TypeError, ValueError):
+            parameter = None
+        if parameter is not None:
+            if parameter.kind == inspect.Parameter.POSITIONAL_ONLY:
+                predictions = analyze_video(str(path), deadline)
+            else:
+                predictions = analyze_video(str(path), deadline=deadline)
+        else:
+            predictions = analyze_video(str(path))
+        for v in predictions:
             if control.finished:
                 return
             t = float(v["timecode_sec"])
@@ -207,9 +236,17 @@ def run_job(control):
             frame = frame_b64(path, t)
             if frame is None:
                 raise ValueError("cannot extract evidence frame")
+            rule = v.get("rule") or ""
+            if not rule.strip():
+                try:
+                    found = lookup_rule(v["type"])
+                    if found and isinstance(found.get("rule"), str):
+                        rule = found["rule"]
+                except Exception:
+                    log.warning("rules_lookup_failed job_id=%s", control.job_id)
             violations.append(Violation(
                 type=v["type"], timecode_sec=t, description=v["description"],
-                rule=v.get("rule", ""), evidence_frames=[frame],
+                rule=rule, evidence_frames=[frame],
             ).model_dump())
         control.finish("done", {"verdict": "violation" if violations else "no_violation",
                                  "violations": violations})
@@ -303,7 +340,7 @@ def ui_job(job_id: str):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model_loaded": MODEL_LOADED, "workers": WORKERS}
+    return {"status": "ok", "model_loaded": MODEL_LOADED, "workers": WORKERS, "demo_mode": DEMO_MODE}
 
 
 class SPAStaticFiles(StaticFiles):

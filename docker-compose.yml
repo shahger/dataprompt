@@ -27,9 +27,11 @@ services:
       RULE_IN_DESCRIPTION: ${RULE_IN_DESCRIPTION:-true}
       JOB_TIMEOUT_SEC: ${JOB_TIMEOUT_SEC:-270}
       MODEL_DIR: ${MODEL_DIR:-/app/models}
+      DEMO_MODE: ${DEMO_MODE:-false}
     volumes:
       - uploads:/data/uploads
       - ./models:/app/models:ro
+      - ./data:/app/data:ro
     depends_on:
       db:
         condition: service_healthy
