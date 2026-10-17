@@ -1,6 +1,5 @@
-fastapi
-uvicorn
-python-multipart
-aiofiles
-opencv-python-headless
-psycopg[binary]
+fastapi==0.137.2
+uvicorn==0.49.0
+python-multipart==0.0.32
+opencv-python-headless==5.0.0.93
+psycopg[binary]==3.3.4
