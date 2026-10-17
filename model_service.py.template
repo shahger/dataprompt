@@ -1,0 +1,41 @@
+"""Template. Copy to model_service.py once the notebook inference code is ready.
+Contract: analyze_video(path) -> list of {"type", "timecode_sec", "description", "rule"}; [] = no violation.
+The model is loaded ONCE at import time. No internet access, no cloud APIs."""
+import os, time
+import cv2
+# import onnxruntime as ort
+
+MODEL_DIR = os.environ.get("MODEL_DIR", "models")
+SAMPLE_FPS = 2            # frames per second that are analysed
+JOB_BUDGET_SEC = 240      # stop and return a partial result before the 5-minute jury limit
+
+# SESSION = ort.InferenceSession(os.path.join(MODEL_DIR, "model.onnx"),
+#                                providers=["CPUExecutionProvider"])   # loaded once
+
+
+def iter_frames(path, sample_fps=SAMPLE_FPS):
+    cap = cv2.VideoCapture(path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    step = max(1, int(round(fps / sample_fps)))
+    i = 0
+    while True:
+        if not cap.grab():          # grab() is cheap; retrieve() only on sampled frames
+            break
+        if i % step == 0:
+            ok, frame = cap.retrieve()
+            if ok:
+                yield i / fps, frame
+        i += 1
+    cap.release()
+
+
+def analyze_video(path):
+    start = time.time()
+    found = []
+    for t, frame in iter_frames(path):
+        if time.time() - start > JOB_BUDGET_SEC:
+            break
+        # TODO: run the model on `frame`; when an event is detected:
+        # found.append({"type": "...", "timecode_sec": t, "description": "...", "rule": "..."})
+        pass
+    return found

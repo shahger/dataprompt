@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Cash discipline video check</title>
+<style>body{font-family:system-ui,sans-serif;max-width:800px;margin:2rem auto;padding:0 1rem}
+img{max-width:240px;margin:4px}.v{border:1px solid #888;padding:12px;margin:12px 0}</style></head>
+<body><h1>Cash discipline video check</h1>
+<input type="file" id="f" accept=".mov,video/quicktime"><button id="go">Analyze</button>
+<p id="status"></p><div id="out"></div>
+<script>
+const $ = id => document.getElementById(id);
+$("go").onclick = async () => {
+  const file = $("f").files[0];
+  if (!file) { $("status").textContent = "Choose a .mov file"; return; }
+  $("out").textContent = ""; $("status").textContent = "Uploading...";
+  const fd = new FormData(); fd.append("file", file);
+  const r = await fetch("/ui/api/analyze", { method: "POST", body: fd });
+  if (!r.ok) { $("status").textContent = "Upload failed: " + r.status; return; }
+  const { job_id } = await r.json(); $("status").textContent = "Processing...";
+  while (true) {
+    await new Promise(s => setTimeout(s, 2000));
+    const j = await (await fetch("/ui/api/jobs/" + job_id)).json();
+    if (j.status === "processing") continue;
+    if (j.status === "failed") { $("status").textContent = "Failed: " + (j.error || ""); return; }
+    show(j); return;
+  }
+};
+function show(j) {
+  $("status").textContent = j.verdict === "violation" ? "Signs of possible violations found" : "No violation detected";
+  for (const v of j.violations || []) {
+    const d = document.createElement("div"); d.className = "v";
+    const h = document.createElement("b"); h.textContent = v.type + " @ " + v.timecode_sec + " s";
+    const p = document.createElement("p"); p.textContent = v.description;
+    const r = document.createElement("p"); r.textContent = "Rule: " + (v.rule || "-");
+    d.append(h, p, r);
+    for (const f of v.evidence_frames) { const i = document.createElement("img"); i.src = "data:image/jpeg;base64," + f.image_base64; d.append(i); }
+    $("out").append(d);
+  }
+}
+</script></body></html>
