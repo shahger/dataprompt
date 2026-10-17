@@ -10,5 +10,5 @@ elseif (Get-Command python -ErrorAction SilentlyContinue) { $python = 'python' }
 else { throw 'Нужен Python и зависимости requirements-dev.txt для проверки сервиса.' }
 $arguments = @((Join-Path $project 'tools/check_public.py'), '--base-url', $BaseUrl)
 if ($Video) { $arguments += @('--video', (Resolve-Path -LiteralPath $Video).Path) }
-& $python @arguments
+& $python -X utf8 @arguments
 if ($LASTEXITCODE -ne 0) { throw 'Проверка публичного сервиса завершилась ошибкой.' }

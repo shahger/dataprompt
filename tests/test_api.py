@@ -244,3 +244,15 @@ def test_jury_rule_description_is_separate_from_ui(service, video, monkeypatch, 
     assert ui['description'] == 'Описание'
     assert ui['rule'] == rule
     assert client.get('/api/v1/jobs/' + job['job_id'], headers=HEADERS).json() == job
+
+
+@pytest.mark.parametrize('enabled', [True, False])
+def test_missing_rule_does_not_change_description(service, video, monkeypatch, enabled):
+    module, client, _ = service
+    monkeypatch.setattr(module, 'INCLUDE_RULE', False)
+    monkeypatch.setattr(module, 'RULE_IN_DESCRIPTION', enabled)
+    monkeypatch.setattr(module, 'analyze_video', lambda path: [{
+        'type': 'test', 'timecode_sec': 0, 'description': 'Описание без правила'}])
+    job = wait_job(client, upload(client, video).json()['job_id'])
+    assert job['violations'][0]['description'] == 'Описание без правила'
+    assert 'rule' not in job['violations'][0]

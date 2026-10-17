@@ -110,17 +110,18 @@ async def lifespan(app):
         path.unlink(missing_ok=True)
     pool = ThreadPoolExecutor(max_workers=WORKERS)
     app.state.pool = pool
-    if not MODEL_LOADED:
-        log.warning("model_service.py absent: stub returns no_violation")
     if DEMO_MODE:
         log.warning("DEMO MODE ENABLED: SYNTHETIC RESULTS ONLY; NO REAL ANALYSIS")
+    elif not MODEL_LOADED:
+        log.warning("model_service.py absent: stub returns no_violation")
     try:
         yield
     finally:
         await run_in_threadpool(pool.shutdown, wait=True)
 
 
-app = FastAPI(title="Cash discipline video analyzer", lifespan=lifespan)
+# Keep OpenAPI JSON local; the default Swagger/ReDoc pages fetch CDN assets.
+app = FastAPI(title="Cash discipline video analyzer", lifespan=lifespan, docs_url=None, redoc_url=None)
 
 
 def check_key(x_api_key: str | None = Header(None)):

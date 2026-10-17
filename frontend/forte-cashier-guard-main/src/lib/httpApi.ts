@@ -78,6 +78,7 @@ export const httpApi: AnalyzeApi = {
       if (!response.ok) throw new ApiError(statusMessage(response.status), response.status, response.status >= 500);
       try { return validateJob(await response.json()); }
       catch (error) {
+        if (ctrl.signal.aborted) throw error;
         if (error instanceof ApiError) throw error;
         throw new ApiError('Сервер вернул некорректный ответ.');
       }

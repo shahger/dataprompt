@@ -45,11 +45,20 @@ def analyze(args, path):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise ToolError("per-video deadline exceeded")
-        try:
-            response = session.request(method, base + endpoint, headers=headers,
-                                       timeout=min(args.request_timeout, remaining), **kwargs)
-        except requests.RequestException as exc:
-            raise ToolError(f"HTTP connection/request failed ({type(exc).__name__})") from None
+        # Retry idempotent status checks only. A failed POST may already have
+        # created a job, so automatic resubmission could duplicate processing.
+        for attempt in range(3 if method == "GET" else 1):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ToolError("per-video deadline exceeded")
+            try:
+                response = session.request(method, base + endpoint, headers=headers,
+                                           timeout=min(args.request_timeout, remaining), **kwargs)
+                break
+            except requests.RequestException as exc:
+                if method != "GET" or attempt == 2:
+                    raise ToolError(f"HTTP connection/request failed ({type(exc).__name__})") from None
+                time.sleep(min(0.5, max(0, deadline - time.monotonic())))
         if not response.ok:
             raise ToolError(f"HTTP {response.status_code} from {endpoint.split('/jobs/')[0]}")
         try:

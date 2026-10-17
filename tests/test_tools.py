@@ -98,3 +98,32 @@ def test_public_video_check_keeps_key_in_process(monkeypatch, tmp_path, capsys):
     assert called[0][1] == 'private-test-key'
     captured = capsys.readouterr()
     assert 'private-test-key' not in captured.out + captured.err
+
+
+def test_poll_retries_a_transient_connection_without_resubmitting(video, monkeypatch):
+    calls = []
+    class Response:
+        ok = True
+        def __init__(self, payload): self.payload = payload
+        def json(self): return self.payload
+    def request(self, method, url, **kwargs):
+        calls.append(method)
+        if method == 'POST': return Response({'job_id': 'abc123'})
+        if calls.count('GET') == 1: raise requests.ConnectionError('private diagnostic')
+        return Response({'job_id': 'abc123', 'status': 'done', 'verdict': 'no_violation', 'violations': []})
+    monkeypatch.setattr(requests.Session, 'request', request)
+    config = args()
+    config.timeout = 3
+    job, _ = common.analyze(config, video)
+    assert job['status'] == 'done'
+    assert calls == ['POST', 'GET', 'GET']
+
+
+def test_interrupted_upload_is_never_automatically_resubmitted(video, monkeypatch):
+    calls = []
+    def request(self, method, url, **kwargs):
+        calls.append(method)
+        raise requests.ConnectionError('private diagnostic')
+    monkeypatch.setattr(requests.Session, 'request', request)
+    with pytest.raises(common.ToolError): common.analyze(args(), video)
+    assert calls == ['POST']
