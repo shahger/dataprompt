@@ -11,16 +11,25 @@ $("go").onclick = async () => {
   const file = $("f").files[0];
   if (!file) { $("status").textContent = "Choose a .mov file"; return; }
   $("out").textContent = ""; $("status").textContent = "Uploading...";
+  $("go").disabled = true;
+  try {
   const fd = new FormData(); fd.append("file", file);
   const r = await fetch("/ui/api/analyze", { method: "POST", body: fd });
   if (!r.ok) { $("status").textContent = "Upload failed: " + r.status; return; }
   const { job_id } = await r.json(); $("status").textContent = "Processing...";
   while (true) {
     await new Promise(s => setTimeout(s, 2000));
-    const j = await (await fetch("/ui/api/jobs/" + job_id)).json();
+    const response = await fetch("/ui/api/jobs/" + job_id);
+    if (!response.ok) throw new Error("Status request failed: " + response.status);
+    const j = await response.json();
     if (j.status === "processing") continue;
     if (j.status === "failed") { $("status").textContent = "Failed: " + (j.error || ""); return; }
     show(j); return;
+  }
+  } catch (error) {
+    $("status").textContent = "Request failed. Check the connection and retry.";
+  } finally {
+    $("go").disabled = false;
   }
 };
 function show(j) {

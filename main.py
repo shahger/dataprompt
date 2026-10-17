@@ -5,10 +5,10 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 import hmac
 import importlib.util
+import json
 import logging
 import math
 import os
-import json
 from pathlib import Path
 import threading
 import time
@@ -93,13 +93,14 @@ async def lifespan(app):
     # This directory belongs exclusively to this service; discard interrupted uploads.
     for path in UPLOAD_DIR.glob("*.mov"):
         path.unlink(missing_ok=True)
-    app.state.pool = ThreadPoolExecutor(max_workers=WORKERS)
+    pool = ThreadPoolExecutor(max_workers=WORKERS)
+    app.state.pool = pool
     if not MODEL_LOADED:
         log.warning("model_service.py absent: stub returns no_violation")
     try:
         yield
     finally:
-        await run_in_threadpool(app.state.pool.shutdown, wait=True)
+        await run_in_threadpool(pool.shutdown, wait=True)
 
 
 app = FastAPI(title="Cash discipline video analyzer", lifespan=lifespan)
@@ -152,12 +153,12 @@ class JobControl:
 def frame_b64(video_path, t_sec):
     cap = cv2.VideoCapture(str(video_path))
     try:
-        cap.set(cv2.CAP_PROP_POS_MSEC, t_sec * 1000)
+        sought = cap.set(cv2.CAP_PROP_POS_MSEC, t_sec * 1000)
         ok, frame = cap.read()
         fps = cap.get(cv2.CAP_PROP_FPS)
         fps = fps if math.isfinite(fps) and fps > 0 else 30.0
         timestamp = max(0.0, (cap.get(cv2.CAP_PROP_POS_FRAMES) - 1) / fps)
-        if not ok:
+        if not sought or not ok:
             # Broken indexes and times beyond EOF: decode sequentially and retain
             # the nearest readable frame, including the first/last at the edges.
             cap.release()

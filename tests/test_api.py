@@ -191,3 +191,36 @@ def test_structured_log_has_no_payload(service, video, monkeypatch, caplog):
     assert set(records[-1]) == {"job_id", "duration_sec", "verdict"}
     assert records[-1]["job_id"] == job["job_id"]
     assert "unit-test-key" not in caplog.text
+
+
+def test_fallback_when_seek_returns_false(service, video, monkeypatch):
+    module, _, _ = service
+    capture = module.cv2.VideoCapture
+
+    class NoSeek:
+        def __init__(self, path):
+            self.cap = capture(path)
+
+        def set(self, prop, value):
+            return False
+
+        def __getattr__(self, name):
+            return getattr(self.cap, name)
+
+    monkeypatch.setattr(module.cv2, "VideoCapture", NoSeek)
+    evidence = module.frame_b64(video, 0.5)
+    assert evidence["timestamp_sec"] == pytest.approx(0.5)
+
+
+def test_persisted_result_and_interrupted_upload_on_restart(service, video):
+    module, client, fake = service
+    from fastapi.testclient import TestClient
+    job = wait_job(client, upload(client, video).json()["job_id"])
+    fake.create_job("interrupted")
+    orphan = module.UPLOAD_DIR / "orphan.mov"
+    orphan.write_bytes(b"interrupted")
+    # Simulate another startup after all submitted work has completed.
+    with TestClient(module.app) as restarted:
+        assert restarted.get("/api/v1/jobs/" + job["job_id"], headers=HEADERS).json() == job
+        assert restarted.get("/api/v1/jobs/interrupted", headers=HEADERS).json()["status"] == "failed"
+        assert not orphan.exists()
