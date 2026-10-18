@@ -1,5 +1,9 @@
 # Datathon '26 (ForteBank case): full handoff summary
 
+**Historical development record.** This file describes an earlier build stage, not the current release.
+For the integrated model, deployment and jury API use the [documentation index](README.md).
+Statements about missing models, stubs or unavailable Docker are retained as historical evidence.
+
 Purpose: paste this whole file into another AI chat and continue working. It is written so the next assistant can immediately help you **build, run and ship** the service. The API section (section 3) is the most detailed on purpose.
 
 **Honesty notes.** Everything marked "not verified" was never executed by me (the previous assistant): the FastAPI + Postgres stack, the browser UI, the tools scripts and the Docker build of the skeleton were only syntax-checked. Verified in a sandbox: the label file parsing, OpenCV seek-by-timestamp frame extraction on the dataset `.mov` files, and decode speed (section 5).

@@ -1,5 +1,9 @@
 # Hardening verification
 
+**Historical development record.** This file describes an earlier build stage, not the current release.
+For the integrated model, deployment and jury API use the [documentation index](README.md).
+Statements about missing models, stubs or unavailable Docker are retained as historical evidence.
+
 Mode A: Docker client/server 29.8.2, Compose 5.6.0, Linux amd64,
 12 Docker CPUs, 8,152,469,504 bytes RAM. Python 3.13.7; Node 24.16.0.
 Initial tracked state: four PowerShell scripts modified only by UTF-8 BOM additions.

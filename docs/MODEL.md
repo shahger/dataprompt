@@ -21,7 +21,10 @@ video → 3 fps frames → RT-DETRv2-R18 detector (ONNX) → ByteTrack (people) 
 
 ## Honest evaluation (40 training videos, leave-one-pair-out)
 
-Each violation video is held out together with its clean twin.
+Each violation video is held out together with its clean twin. The role/state/action heads
+and calibration thresholds are fitted without that pair, then the pipeline runs on its raw
+videos. These are the model team's reported measurements; training and the full evaluation
+script live in the separate ML project.
 
 | Metric | Value |
 |---|---|
@@ -47,6 +50,8 @@ Measure on the deployment laptop with `tools/bench_model.py`.
 
 1. Retrain in the ML repo.
 2. Copy `models/detector/{detector.onnx,config.json,preprocessor_config.json}`, `models/heads.joblib` and `models/rule_params.json` into `models/`.
-3. Recreate the API container.
+3. Include the complete local `models/encoder/dinov2-small/` checkpoint and processor files.
+4. Restart the API for bind-mounted weight changes; rebuild/recreate it for source or dependency changes.
+   Schedule this outside active jury requests.
 
 The `ml/` package must be the same version that produced the weights.

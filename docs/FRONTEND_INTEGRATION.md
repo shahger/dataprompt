@@ -1,5 +1,9 @@
 # Frontend integration: inspection and environment
 
+**Historical development record.** This file describes an earlier build stage, not the current release.
+For the integrated model, deployment and jury API use the [documentation index](README.md).
+Statements about missing models, stubs or unavailable Docker are retained as historical evidence.
+
 ## Step 0
 
 Docker client/server 29.8.2; Docker Desktop 4.95.0; Compose 5.6.0.

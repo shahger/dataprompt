@@ -1,5 +1,9 @@
 # Environment check (Step 1)
 
+**Historical development record.** This file describes an earlier build stage, not the current release.
+For the integrated model, deployment and jury API use the [documentation index](README.md).
+Statements about missing models, stubs or unavailable Docker are retained as historical evidence.
+
 - Docker client: 29.8.2, windows/amd64, context desktop-linux.
 - Docker Compose: v5.6.0.
 - Docker server/info: unavailable; named pipe dockerDesktopLinuxEngine does not exist.
