@@ -1,1 +1,18 @@
-# Add only verified, pinned CPU inference dependencies here; no GPU or cloud SDKs.
+# Verified, pinned CPU inference dependencies (model_service.py + ml/). No GPU or cloud SDKs.
+# CPU-only torch wheels (no CUDA); used only to install, never at runtime.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.12.1
+torchvision==0.27.1
+transformers==5.12.1
+huggingface_hub==1.33.0
+safetensors==0.8.0
+tokenizers==0.22.2
+onnxruntime==1.31.0
+scikit-learn==1.7.2
+joblib==1.5.2
+numpy==2.5.4
+scipy==1.18.1
+pandas==3.0.6
+pillow==13.0.0
+supervision==0.31.0
+trackers==2.6.1
