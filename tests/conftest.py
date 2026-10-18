@@ -57,6 +57,8 @@ def service(monkeypatch, tmp_path):
     fake.get_job = get_job
     fake.rows = rows
     monkeypatch.setitem(sys.modules, "db", fake)
+    # Unit tests exercise the service with the stub, never the real (slow) model.
+    monkeypatch.setitem(sys.modules, "model_service", None)
     monkeypatch.delitem(sys.modules, "main", raising=False)
     monkeypatch.setenv("API_KEY", "unit-test-key")
     monkeypatch.delenv("DEMO_MODE", raising=False)
